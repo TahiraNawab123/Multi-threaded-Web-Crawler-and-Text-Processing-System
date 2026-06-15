@@ -31,7 +31,6 @@ static void local_add_palindrome(LocalStats *s, const char *w)
     s->palindromes[s->pal_count++] = strdup(w);
 }
 
-/* ── Word hash-table insert ──────────────────────────────── */
 static int local_word_insert(LocalStats *s, const char *word)
 {
     uint32_t idx = fnv1a(word) & (HASH_SIZE - 1);
