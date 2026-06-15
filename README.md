@@ -151,8 +151,6 @@ D:P ratios tested for graph 3 (e.g. T=16):
 
 ## URLs
 
-15 Project Gutenberg plaintext books:
-
 ```
 https://www.gutenberg.org/cache/epub/67979/pg67979.txt
 https://www.gutenberg.org/cache/epub/21500/pg21500.txt
