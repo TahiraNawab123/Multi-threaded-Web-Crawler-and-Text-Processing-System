@@ -5,7 +5,6 @@
 #include <string.h>
 #include <curl/curl.h>
 
-/* ── libcurl write callback ─────────────────────────────── */
 typedef struct { char *data; size_t size; } CurlBuf;
 
 static size_t write_cb(void *ptr, size_t sz, size_t nmemb, void *ud)
@@ -21,7 +20,6 @@ static size_t write_cb(void *ptr, size_t sz, size_t nmemb, void *ud)
     return bytes;
 }
 
-/* ── Download one URL, return heap string (caller frees) ── */
 static char *fetch_url(const char *url)
 {
     CURL *curl = curl_easy_init();
@@ -43,7 +41,6 @@ static char *fetch_url(const char *url)
     return buf.data;
 }
 
-/* ── Last-downloader detection ──────────────────────────── */
 static int             downloaders_done  = 0;
 static int             total_downloaders = 0;
 static pthread_mutex_t done_lock         = PTHREAD_MUTEX_INITIALIZER;
@@ -54,7 +51,6 @@ void downloader_init(int num_downloaders)
     total_downloaders = num_downloaders;
 }
 
-/* ── Stage 1: URL Reader ─────────────────────────────────── */
 void *url_reader_thread(void *arg)
 {
     URLReaderArgs *a = (URLReaderArgs *)arg;
@@ -79,7 +75,6 @@ void *url_reader_thread(void *arg)
     return NULL;
 }
 
-/* ── Stage 2: Downloader ─────────────────────────────────── */
 void *downloader_thread(void *arg)
 {
     DownloaderArgs *a = (DownloaderArgs *)arg;
@@ -95,7 +90,6 @@ void *downloader_thread(void *arg)
         free(item);
         if (!text) continue;
 
-        /* Split text into chunks of chunk_size words */
         char  *saveptr = NULL;
         char  *tok     = strtok_r(text, " \t\r\n", &saveptr);
         int    wc      = 0;
@@ -122,7 +116,6 @@ void *downloader_thread(void *arg)
             }
             tok = strtok_r(NULL, " \t\r\n", &saveptr);
         }
-        /* Flush partial trailing chunk */
         if (wc > 0) {
             ChunkItem *ci = malloc(sizeof(ChunkItem));
             ci->text      = strdup(cbuf);
@@ -138,7 +131,6 @@ void *downloader_thread(void *arg)
     *a->dl_time_acc += elapsed;
     pthread_mutex_unlock(a->dl_time_lock);
 
-    /* Close chunk queue only after the last downloader finishes */
     pthread_mutex_lock(&done_lock);
     downloaders_done++;
     if (downloaders_done == total_downloaders) {
