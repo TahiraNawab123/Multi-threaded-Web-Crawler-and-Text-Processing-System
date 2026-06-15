@@ -42,7 +42,6 @@ void *queue_pop(BoundedQueue *q)
     while (q->count == 0 && !q->closed)
         pthread_cond_wait(&q->not_empty, &q->lock);
     if (q->count == 0) {
-        /* closed + empty: wake the next waiting consumer, then return EOF */
         pthread_cond_signal(&q->not_empty);
         pthread_mutex_unlock(&q->lock);
         return NULL;
