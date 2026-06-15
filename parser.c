@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <ctype.h>
 
-/* ── Create a fresh LocalStats for one parser thread ─────── */
 LocalStats *local_stats_create(void)
 {
     LocalStats *s   = calloc(1, sizeof(LocalStats));
@@ -14,7 +13,6 @@ LocalStats *local_stats_create(void)
     return s;
 }
 
-/* ── Palindrome helpers ──────────────────────────────────── */
 static int local_has_palindrome(LocalStats *s, const char *w)
 {
     for (int i = 0; i < s->pal_count; i++)
@@ -46,13 +44,11 @@ static int local_word_insert(LocalStats *s, const char *word)
     return 1;
 }
 
-/* ── Process one text chunk ──────────────────────────────── */
 void process_chunk(LocalStats *s, const char *text)
 {
     char *buf = strdup(text);
     if (!buf) return;
 
-    /* Sentence count — avoid counting "..." as 3 sentences */
     for (const char *p = text; *p; p++) {
         if (*p == '.' || *p == '?' || *p == '!') {
             const char *q = p + 1;
@@ -61,7 +57,6 @@ void process_chunk(LocalStats *s, const char *text)
         }
     }
 
-    /* Word-level stats */
     char *saveptr = NULL;
     char *token   = strtok_r(buf, " \t\r\n", &saveptr);
     while (token) {
@@ -84,7 +79,6 @@ void process_chunk(LocalStats *s, const char *text)
     free(buf);
 }
 
-/* ── Parser thread entry point ───────────────────────────── */
 void *parser_thread(void *arg)
 {
     ParserArgs *a  = (ParserArgs *)arg;
@@ -105,7 +99,6 @@ void *parser_thread(void *arg)
     return NULL;
 }
 
-/* ── Cleanup ─────────────────────────────────────────────── */
 void local_stats_destroy(LocalStats *s)
 {
     if (!s) return;
