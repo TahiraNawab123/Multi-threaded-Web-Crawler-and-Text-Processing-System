@@ -3,7 +3,6 @@
 #include <string.h>
 #include <stdio.h>
 
-/* ── Global dedup word table (used only during aggregation) ─ */
 static struct WordNode **g_word_table = NULL;
 static long              g_unique_count = 0;
 
@@ -39,20 +38,17 @@ static void g_table_free(void)
     g_word_table = NULL;
 }
 
-/* ── Merge all LocalStats into GlobalStats ──────────────── */
 void aggregate(GlobalStats *g, LocalStats **locals, int count)
 {
     memset(g, 0, sizeof(GlobalStats));
     g->pal_capacity = 256;
     g->palindromes  = malloc(sizeof(char *) * g->pal_capacity);
 
-    /* 1. Sentence count and total words (simple sum) */
     for (int i = 0; i < count; i++) {
         g->total_sentence_count += locals[i]->sentence_count;
         g->total_words          += locals[i]->total_words;
     }
 
-    /* 2. Palindromes: deduplicated union */
     for (int i = 0; i < count; i++) {
         for (int j = 0; j < locals[i]->pal_count; j++) {
             const char *w = locals[i]->palindromes[j];
@@ -70,7 +66,6 @@ void aggregate(GlobalStats *g, LocalStats **locals, int count)
         }
     }
 
-    /* 3. Unique words: merge all per-thread hash tables into one */
     g_table_init();
     for (int i = 0; i < count; i++)
         for (int b = 0; b < HASH_SIZE; b++)
@@ -80,7 +75,6 @@ void aggregate(GlobalStats *g, LocalStats **locals, int count)
     g_table_free();
 }
 
-/* ── Print the final statistics block ───────────────────── */
 void print_global_stats(const GlobalStats *g)
 {
     printf("\n╔══════════════════════════════════════════════════════╗\n");
@@ -91,7 +85,6 @@ void print_global_stats(const GlobalStats *g)
     printf("2. Unique Word Count : %ld\n\n", g->unique_word_count);
     printf("3. Palindromic Words Found (%d unique):\n", g->pal_count);
 
-    /* Insertion-sort palindromes for reproducible output */
     for (int i = 1; i < g->pal_count; i++) {
         char *key = g->palindromes[i];
         int   j   = i - 1;
