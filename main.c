@@ -1,15 +1,3 @@
-/*
- * main.c — Pipeline orchestration
- *
- * Stage 1  URL Reader  (1 thread)   → url_queue  (size 5)
- * Stage 2  Downloaders (D threads)  → chunk_queue (size 30)
- * Stage 3  Parsers     (P threads)  → LocalStats[]
- * Stage 4  Aggregator  (1 thread)   → GlobalStats → stdout
- *
- * Thread split:  D = T/3  (min 1),  P = T - D
- * Optional 4th argument overrides D for experiments.
- */
-
 #include "queue.h"
 #include "downloader.h"
 #include "parser.h"
@@ -59,17 +47,14 @@ int main(int argc, char *argv[])
     BoundedQueue *url_queue   = queue_create(URL_QUEUE_SIZE);
     BoundedQueue *chunk_queue = queue_create(CHUNK_QUEUE_SIZE);
 
-    /* ── Timing accumulators ────────────────────────────── */
     double          dl_acc   = 0.0,  par_acc = 0.0;
     pthread_mutex_t dl_lock  = PTHREAD_MUTEX_INITIALIZER;
     pthread_mutex_t par_lock = PTHREAD_MUTEX_INITIALIZER;
 
-    /* ── Stage 1: URL reader ─────────────────────────────── */
     pthread_t     reader_tid;
     URLReaderArgs reader_args = {url_file, url_queue};
     pthread_create(&reader_tid, NULL, url_reader_thread, &reader_args);
 
-    /* ── Stage 2: Downloaders ────────────────────────────── */
     pthread_t      *dl_tids = malloc(sizeof(pthread_t) * D);
     DownloaderArgs *dl_args = malloc(sizeof(DownloaderArgs) * D);
     for (int i = 0; i < D; i++) {
@@ -79,7 +64,6 @@ int main(int argc, char *argv[])
         pthread_create(&dl_tids[i], NULL, downloader_thread, &dl_args[i]);
     }
 
-    /* ── Stage 3: Parsers ────────────────────────────────── */
     pthread_t   *par_tids = malloc(sizeof(pthread_t) * P);
     ParserArgs  *par_args = malloc(sizeof(ParserArgs) * P);
     LocalStats **locals   = malloc(sizeof(LocalStats *) * P);
@@ -89,14 +73,12 @@ int main(int argc, char *argv[])
         pthread_create(&par_tids[i], NULL, parser_thread, &par_args[i]);
     }
 
-    /* ── Join all threads ────────────────────────────────── */
     pthread_join(reader_tid, NULL);
     for (int i = 0; i < D; i++) pthread_join(dl_tids[i], NULL);
 
     double agg_start = now_sec();
     for (int i = 0; i < P; i++) pthread_join(par_tids[i], NULL);
 
-    /* ── Stage 4: Aggregator ─────────────────────────────── */
     GlobalStats g;
     aggregate(&g, locals, P);
     double agg_end  = now_sec();
@@ -104,7 +86,6 @@ int main(int argc, char *argv[])
 
     print_global_stats(&g);
 
-    /* ── Performance metrics ─────────────────────────────── */
     double total_time = wall_end - wall_start;
     RunMetrics m = {
         .T          = total_threads,
@@ -121,7 +102,6 @@ int main(int argc, char *argv[])
     metrics_print(&m);
     metrics_append_csv("metrics.csv", &m);
 
-    /* ── Cleanup ─────────────────────────────────────────── */
     global_stats_destroy(&g);
     for (int i = 0; i < P; i++) local_stats_destroy(locals[i]);
     free(locals);  free(par_args);  free(par_tids);
