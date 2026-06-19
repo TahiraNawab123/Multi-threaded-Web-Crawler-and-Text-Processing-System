@@ -3,107 +3,157 @@
 #include <string.h>
 #include <stdio.h>
 
+  // Global hash table used during aggregation
+  // to calculate the final unique word count. 
 static struct WordNode **g_word_table = NULL;
-static long              g_unique_count = 0;
+static long g_unique_count = 0;
 
+  // Initialize the temporary hash table 
 static void g_table_init(void)
 {
-    g_word_table   = calloc(HASH_SIZE, sizeof(struct WordNode *));
+    g_word_table = calloc(HASH_SIZE, sizeof(struct WordNode *));
     g_unique_count = 0;
 }
 
+  // Insert a word only if it does not already exist 
 static void g_table_insert(const char *word)
 {
     uint32_t idx = fnv1a(word) & (HASH_SIZE - 1);
+
     for (struct WordNode *n = g_word_table[idx]; n; n = n->next)
-        if (strcmp(n->word, word) == 0) return;
+        if (strcmp(n->word, word) == 0)
+            return;
     struct WordNode *n = malloc(sizeof(struct WordNode));
     n->word = strdup(word);
     n->next = g_word_table[idx];
     g_word_table[idx] = n;
+
     g_unique_count++;
 }
 
+  // Release memory used by the temporary hash table
 static void g_table_free(void)
 {
-    if (!g_word_table) return;
-    for (int i = 0; i < HASH_SIZE; i++) {
+    if (!g_word_table)
+        return;
+    for (int i = 0; i < HASH_SIZE; i++)
+    {
         struct WordNode *n = g_word_table[i];
-        while (n) {
+        while (n)
+        {
             struct WordNode *t = n->next;
-            free(n->word); free(n); n = t;
+            free(n->word);
+            free(n);
+            n = t;
         }
     }
     free(g_word_table);
     g_word_table = NULL;
 }
 
+  // Merge all parser thread results into one global result
 void aggregate(GlobalStats *g, LocalStats **locals, int count)
 {
     memset(g, 0, sizeof(GlobalStats));
+     // Initial space reserved for palindrome storage 
     g->pal_capacity = 256;
-    g->palindromes  = malloc(sizeof(char *) * g->pal_capacity);
+    g->palindromes = malloc(sizeof(char *) * g->pal_capacity);
 
-    for (int i = 0; i < count; i++) {
+    // Combine sentence counts and total word counts 
+    for (int i = 0; i < count; i++)
+    {
         g->total_sentence_count += locals[i]->sentence_count;
-        g->total_words          += locals[i]->total_words;
+        g->total_words += locals[i]->total_words;
     }
-
-    for (int i = 0; i < count; i++) {
-        for (int j = 0; j < locals[i]->pal_count; j++) {
-            const char *w = locals[i]->palindromes[j];
+     // Create a unique list of palindromes collected
+    from all parser threads 
+    for (int i = 0; i < count; i++)
+    {
+        for (int j = 0; j < locals[i]->pal_count; j++)
+        {
+           const char *w = locals[i]->palindromes[j];
             int found = 0;
             for (int k = 0; k < g->pal_count; k++)
-                if (strcmp(g->palindromes[k], w) == 0) { found = 1; break; }
-            if (!found) {
-                if (g->pal_count == g->pal_capacity) {
+            {
+                if (strcmp(g->palindromes[k], w) == 0)
+                {
+                    found = 1;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                // Expand memory if palindrome array becomes full 
+                if (g->pal_count == g->pal_capacity)
+                {
                     g->pal_capacity *= 2;
-                    g->palindromes = realloc(g->palindromes,
-                                              sizeof(char *) * g->pal_capacity);
+
+                    g->palindromes = realloc(
+                        g->palindromes,
+                        sizeof(char *) * g->pal_capacity);
                 }
                 g->palindromes[g->pal_count++] = strdup(w);
             }
         }
     }
-
+     // Merge all local hash tables to get the final
+     // count of unique words across all URLs 
     g_table_init();
     for (int i = 0; i < count; i++)
+    {
         for (int b = 0; b < HASH_SIZE; b++)
-            for (struct WordNode *n = locals[i]->word_table[b]; n; n = n->next)
+        {
+            for (struct WordNode *n = locals[i]->word_table[b];
+                 n;
+                 n = n->next)
+            {
                 g_table_insert(n->word);
+            }
+        }
+    }
     g->unique_word_count = g_unique_count;
     g_table_free();
 }
-
+// Display the final statistics 
 void print_global_stats(const GlobalStats *g)
 {
-    printf("\n╔══════════════════════════════════════════════════════╗\n");
-    printf(  "║          FINAL STATISTICS  (Group C)                ║\n");
-    printf(  "╚══════════════════════════════════════════════════════╝\n\n");
-
+    printf("\n====================================\n");
+    printf("       FINAL STATISTICS\n");
+    printf("====================================\n\n");
     printf("1. Sentence Count : %ld\n\n", g->total_sentence_count);
     printf("2. Unique Word Count : %ld\n\n", g->unique_word_count);
     printf("3. Palindromic Words Found (%d unique):\n", g->pal_count);
-
-    for (int i = 1; i < g->pal_count; i++) {
+    // Sort the palindromes alphabetically before printing
+    // so output remains consistent between runs
+    for (int i = 1; i < g->pal_count; i++)
+    {
         char *key = g->palindromes[i];
-        int   j   = i - 1;
-        while (j >= 0 && strcmp(g->palindromes[j], key) > 0) {
-            g->palindromes[j + 1] = g->palindromes[j]; j--;
+        int j = i - 1;
+        while (j >= 0 &&
+               strcmp(g->palindromes[j], key) > 0)
+        {
+            g->palindromes[j + 1] = g->palindromes[j];
+            j--;
         }
         g->palindromes[j + 1] = key;
     }
-    for (int i = 0; i < g->pal_count; i++) {
+    // Print palindromes in a readable table-like format 
+    for (int i = 0; i < g->pal_count; i++)
+    {
         printf("   %-20s", g->palindromes[i]);
-        if ((i + 1) % 5 == 0) printf("\n");
+        if ((i + 1) % 5 == 0)
+            printf("\n");
     }
-    if (g->pal_count % 5 != 0) printf("\n");
+    if (g->pal_count % 5 != 0)
+        printf("\n");
     printf("\n");
 }
-
+// Free dynamically allocated memory in GlobalStats
 void global_stats_destroy(GlobalStats *g)
 {
-    if (!g) return;
-    for (int i = 0; i < g->pal_count; i++) free(g->palindromes[i]);
+    if (!g)
+        return;
+    for (int i = 0; i < g->pal_count; i++)
+        free(g->palindromes[i]);
     free(g->palindromes);
 }
